@@ -1,0 +1,80 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-ap-template
+  title: Deploy APP
+  description: Self serve deploy Application
+spec:
+  owner: anahid
+  type: service
+  parameters:
+    - title: App Details
+      required:
+        - name
+        - image
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the APP
+        namespace:
+          title: Namespace
+          default: myvms
+          description: Name of the namespace where the VM will be deployed. The namespace must exists prior to creating the VM.
+        description:
+          title: Image
+          type: string
+          description: Pick VM image
+          enum:
+            - my-golden-rhel9:9.4.1
+            - my-fedora
+        storage:
+          title: Storage request
+          type: string
+          description: Storage in Gi
+          default: 15Gi
+        instancetype:
+          title: Instance type
+          default: u1.medium
+          description: Instance type of the VM.
+          enum:
+            - u1.medium
+            - u1.large
+            - u1.small
+                
+    - title: Cloud init stuffs
+      required:
+        - username
+        - password
+      properties:
+        username:
+          title: username
+          type: string
+          default: cloud-user
+        password:
+          title: password
+          type: string
+    
+  steps:
+    - id: fetch-base
+      name: Fetch Base
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{parameters.name}}
+        targetPath: ./workspace
+
+    - id: push
+      name: Publish
+      action: github:repo:push
+      input:
+        sourcePath: ./workspace
+        repoUrl: ${{parameters.repo.host}}?repo=${{parameters.repo.name}}&owner=${{parameters.repo.owner}}
+        branchName: test
+        commitMessage: test
+
+  output:
+    links:
+      - url: ${{steps.publish.output.mergeRequestUrl}}ßß
+        title: "Go to PR"

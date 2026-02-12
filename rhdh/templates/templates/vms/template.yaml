@@ -1,0 +1,209 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-vm-template
+  title: Deploy VM
+  description: Self serve deploy Virtual Machine
+spec:
+  owner: anahid
+  type: service
+  parameters:
+    - title: VM Details
+      required:
+        - name
+        - imagetag
+        - vmtype
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the VM
+          maxLength: 22
+          pattern: '^([a-zA-Z][a-zA-Z0-9]*)(-[a-zA-Z0-9]+)*$'
+        namespace:
+          title: Namespace
+          default: myvms1
+          type: string
+          enum:
+            - myvms1
+            - myvms2
+            - myapps1
+          description: Choose the namespace where the VM will be deployed. The namespace must exists prior to creating the VM.
+        vmtype:
+          title: Type of VM
+          default: bootc
+          type: string
+          enum:
+            - bootc
+            - fedora
+            - windows
+          description: Choose the type of VM to create.
+        storage:
+          title: Storage request
+          type: string
+          description: Storage in Gi
+          maxLength: 3
+          pattern: '[0-9]'
+          default: "15"
+        instancetype:
+          title: Instance type
+          default: u1.medium
+          description: Instance type of the VM.
+          type: string
+          enum:
+            - u1.medium
+            - u1.large
+            - u1.small
+      errorMessage:
+        properties:
+          storage: 'Only number value allowed (max 3 digit)'
+      dependencies:
+        vmtype:
+          oneOf:
+            - properties:
+                vmtype:
+                  enum:
+                    - bootc
+                    - fedora
+                imagetag:
+                  title: Image Tag
+                  type: string
+                  description: Image Tag
+            - properties:
+                vmtype:
+                  enum:
+                    - windows
+                imagetag:
+                  title: Image Tag
+                  type: string
+                  description: Pick VM image Tag
+                  enum:
+                    - golden-windows1
+                    - golden-windows2
+    - title: Cloud init stuffs
+      required:
+        - username
+        - password
+      properties:
+        username:
+          title: username
+          type: string
+          default: cloud-user
+        password:
+          title: password
+          type: string
+        # softwares:
+        #   title: Select additional softwares
+        #   type: array
+        #   items:
+        #     type: string
+        #     enum:
+        #       - subscription-manager
+        #       - httpd.service
+        #   uniqueItems: true
+        #   ui:widget: checkboxes
+    
+  steps:
+    - id: generate-id
+      name: Generate Unique ID
+      action: roadiehq:utils:jsonata
+      input:
+        # This JSONata expression generates a YYMMDDHHmmss timestamp
+        data: {}
+        expression: "$fromMillis($millis(), '[Y01][M01][D01][H01][m01][s01]')"
+    - id: debug-log
+      name: Debug Generated ID
+      action: debug:log
+      input:
+        message: "Component ID: ${{ parameters.name |lower }}-${{ steps['generate-id'].output.result }}"
+    - id: fetch-base-bootc
+      name: Fetch Base
+      action: fetch:template
+      if: ${{ parameters.vmtype === 'bootc' }}
+      input:
+        url: ./bootc-template
+        targetPath: ./virt-vms
+        values:
+          component_id: "${{ parameters.name |lower }}-${{ steps['generate-id'].output.result }}"
+          name: ${{parameters.name}}
+          namespace: ${{parameters.namespace}}
+          imagetag: ${{parameters.imagetag}}
+          instancetype: ${{parameters.instancetype}}
+          storage: ${{parameters.storage}}
+          cloudinitusername: ${{parameters.username}}
+          cloudinitpassword: ${{parameters.password}}
+    - id: fetch-base-fedora
+      name: Fetch Base
+      action: fetch:template
+      if: ${{ parameters.vmtype === 'fedora' }}
+      input:
+        url: ./fedora-template
+        targetPath: ./virt-vms
+        values:
+          component_id: "${{ parameters.name |lower }}-${{ steps['generate-id'].output.result }}"
+          name: ${{parameters.name}}
+          namespace: ${{parameters.namespace}}
+          imagetag: ${{parameters.imagetag}}
+          instancetype: ${{parameters.instancetype}}
+          storage: ${{parameters.storage}}
+          cloudinitusername: ${{parameters.username}}
+          cloudinitpassword: ${{parameters.password}}
+    - id: fetch-base-windows
+      name: Fetch Base
+      action: fetch:template
+      if: ${{ parameters.vmtype === 'windows' }}
+      input:
+        url: ./windows-template
+        targetPath: ./virt-vms
+        values:
+          component_id: "${{ parameters.name |lower }}-${{ steps['generate-id'].output.result }}"
+          name: ${{parameters.name}}
+          namespace: ${{parameters.namespace}}
+          imagetag: ${{parameters.imagetag}}
+          instancetype: ${{parameters.instancetype}}
+          storage: ${{parameters.storage}}
+          cloudinitusername: ${{parameters.username}}
+          cloudinitpassword: ${{parameters.password}}
+    - id: write-workspace-directory
+      name: List the workspace directory
+      action: debug:log
+      input:
+        listWorkspace: true
+    # - id: delete-load-balancer
+    #   name: Only development environments
+    #   if: ${{ parameters.environment === "staging" or parameters.environment === "development" }}
+    #   action: debug:log
+    #   input:
+    #     message: 'development step'
+    # - id: rename
+    #   name: rename file
+    #   action: fs:rename
+    #   input:
+    #     files:
+    #       - from: ./baremetal/virt-archived/vm.yaml
+    #         to: ./baremetal/virt-archived/${{parameters.name}}.yaml
+
+    # - id: push
+    #   name: Publish
+    #   action: github:repo:push
+    #   input:
+    #     sourcePath: ./baremetal/virts
+    #     repoUrl: github.com?repo=openshift-lab&owner=alinahid477
+    #     # targetPath: baremetal/virts/
+    #     branchName: main
+    #     commitMessage: test
+    - id: create-pull-request
+      name: Create a pull reuqest with target branch name
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?repo=rh-gitops&owner=alinahid477
+        branchName: vms-deploy
+        title: VM Definition for ${{parameters.name}}
+        description: PR to create new vm named ${{parameters.name}}
+        targetBranchName: main
+        # targetPath: baremetal/virts
+
+  output:
+    links:
+      - url: ${{steps.publish.output.mergeRequestUrl}}
+        title: "Go to PR"

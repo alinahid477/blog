@@ -1,0 +1,175 @@
+## This is updated to 1.8 (janus idp sunset is reflected)
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: dynamic-plugins-rhdh
+  namespace: backstage
+data:
+  dynamic-plugins.yaml: |
+    includes:
+      - dynamic-plugins.default.yaml
+    plugins:
+      - package: ./dynamic-plugins/dist/roadiehq-backstage-plugin-github-pull-requests
+        disabled: true
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              roadiehq.backstage-plugin-github-pull-requests:
+                mountPoints:
+                  - mountPoint: entity.page.overview/cards
+                    importName: EntityGithubPullRequestsOverviewCard
+                    config:
+                      layout:
+                        gridColumnEnd:
+                          lg: "span 4"
+                          md: "span 6"
+                          xs: "span 12"
+                      if:
+                        allOf:
+                          - isGithubPullRequestsAvailable
+                  - mountPoint: entity.page.pull-requests/cards
+                    importName: EntityGithubPullRequestsContent
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        allOf:
+                          - isGithubPullRequestsAvailable
+      - package: './dynamic-plugins/dist/backstage-plugin-catalog-backend-module-github-dynamic'
+        disabled: false
+        pluginConfig: {}
+      - package: './dynamic-plugins/dist/backstage-plugin-github-actions'
+        disabled: false
+        pluginConfig: {}
+      - package: './dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic'
+        disabled: false
+        pluginConfig: {}
+      - package: './dynamic-plugins/dist/backstage-community-plugin-tekton'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage-community.plugin-tekton:
+                mountPoints:
+                  - mountPoint: entity.page.ci/cards
+                    importName: TektonCI
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        allOf:
+                          - isTektonCIAvailable
+      - package: './dynamic-plugins/dist/backstage-community-plugin-topology'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage-community.plugin-topology:
+                mountPoints:
+                  - mountPoint: entity.page.topology/cards
+                    importName: TopologyPage
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                        height: 75vh
+                      if:
+                        anyOf:
+                          - hasAnnotation: backstage.io/kubernetes-id
+                          - hasAnnotation: backstage.io/kubernetes-namespace
+      - package: './dynamic-plugins/dist/backstage-community-scaffolder-backend-module-sonarqube-dynamic'
+        disabled: false
+        pluginConfig: {}
+      - package: './dynamic-plugins/dist/backstage-community-plugin-sonarqube-backend-dynamic'
+        disabled: false
+        pluginConfig: {}
+      - package: './dynamic-plugins/dist/backstage-community-plugin-sonarqube'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage-community.plugin-sonarqube:
+                mountPoints:
+                  - mountPoint: entity.page.overview/cards
+                    importName: EntitySonarQubeCard
+                    config:
+                      layout:
+                        gridColumnEnd:
+                          lg: "span 4"
+                          md: "span 6"
+                          xs: "span 12"
+                      if:
+                        allOf:
+                          - isSonarQubeAvailable
+      - package: './dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic'
+        disabled: false
+        pluginConfig:
+          kubernetes:
+            customResources:
+            - group: 'tekton.dev'
+              apiVersion: 'v1beta1'
+              plural: 'pipelines'
+            - group: 'tekton.dev'
+              apiVersion: 'v1beta1'
+              plural: 'pipelineruns'
+            - group: 'tekton.dev'
+              apiVersion: 'v1beta1'
+              plural: 'taskruns'
+            - group: 'route.openshift.io'
+              apiVersion: 'v1'
+              plural: 'routes'
+            serviceLocatorMethod:
+              type: 'multiTenant'
+            clusterLocatorMethods:
+              - type: 'config'
+                clusters:
+                  - name: ocp
+                    url: https://api.metalsno.home.alishomelab.site:6443
+                    authProvider: 'serviceAccount'
+                    skipTLSVerify: true
+                    skipMetricsLookup: true
+                    serviceAccountToken: ${OPENSHIFT_TOKEN}
+      - package: './dynamic-plugins/dist/backstage-plugin-kubernetes'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage.plugin-kubernetes:
+                mountPoints:
+                  - mountPoint: entity.page.kubernetes/cards
+                    importName: EntityKubernetesContent
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        anyOf:
+                          - hasAnnotation: backstage.io/kubernetes-id
+                          - hasAnnotation: backstage.io/kubernetes-namespace
+      - package: './dynamic-plugins/dist/backstage-community-plugin-redhat-argocd'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage-community.plugin-redhat-argocd:
+                mountPoints:
+                  - mountPoint: entity.page.overview/cards
+                    importName: EntityArgoCDOverviewCard
+                    config:
+                      layout:
+                        gridColumnEnd:
+                          lg: "span 8"
+                          xs: "span 12"
+                      if:
+                        allOf:
+                          - isArgocdAvailable
+                  - mountPoint: entity.page.cd/cards
+                    importName: EntityArgoCDHistoryCard
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        allOf:
+                          - isArgocdAvailable
+      - package: './dynamic-plugins/dist/roadiehq-scaffolder-backend-argocd-dynamic'
+        disabled: false
+        pluginConfig: {}

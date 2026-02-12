@@ -1,0 +1,29 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: backstage-collection
+  description: A collection of Templates for Backstage
+spec:
+  type: url
+  targets:
+    - templates/vms/template.yaml
+    - templates/apps/template.yaml
+    - templates/aap/template.yaml
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: "alinahid477" # Must match your GitHub username
+spec:
+  profile:
+    displayName: "Ali Nahid"
+  memberOf: [ "admins" ]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: "admins"
+spec:
+  type: team
+  children: []

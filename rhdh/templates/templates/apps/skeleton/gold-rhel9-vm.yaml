@@ -1,0 +1,68 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: golden-rhel9-test2
+  namespace: openshift-virtualization-os-images
+  finalizers:
+    - kubevirt.io/virtualMachineControllerFinalize
+spec:
+  dataVolumeTemplates:
+    - metadata:
+        name: golden-rhel9-test2
+      spec:
+        source:
+          registry:
+            imageStream: my-golden-rhel9:9.4.1
+            pullMethod: node
+            # url: "docker://image-registry.openshift-image-registry.svc.cluster.local:5000/openshift-virtualization-os-images/my-golden-rhel9:9.4.1"
+            # # url: "docker://metalsno-registry.apps.metalsno.home.alishomelab.site/openshift-virtualization-os-images/my-golden-rhel9:9.4.1"
+            # # pullMethod: node
+            # secretRef: metalsno-registry-endpoint-secret 
+            # certConfigMap: tls-certs 
+        storage:
+          resources:
+            requests:
+              storage: 15Gi
+  instancetype:
+    kind: virtualmachineclusterinstancetype
+    name: u1.medium
+  preference:
+    kind: virtualmachineclusterpreference
+    name: rhel.9
+  running: true
+  template:
+    metadata:
+      labels:
+        network.kubevirt.io/headlessService: headless
+        kubevirt.io/domain: golden-rhel9-test2
+    spec:
+      architecture: amd64
+      domain:
+        devices:
+          autoattachPodInterface: false
+          interfaces:
+            - masquerade: {}
+              name: default
+        machine:
+          type: pc-q35-rhel9.4.0
+        resources: {}
+      networks:
+        - name: default
+          pod: {}
+      subdomain: headless
+      volumes:
+        - dataVolume:
+            name: golden-rhel9-test2
+          name: rootdisk
+        - cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              chpasswd:
+                expire: false
+              password: hfuc-2tfa-8pzk
+              user: cloud-user
+              runcmd:
+              - [ subscription-manager, register, --activationkey=activation-key-default-8j0527, --org=18358794 ]
+              - [ systemctl, enable, httpd.service ]
+              - [ systemctl, start, httpd.service ]
+          name: cloudinitdisk

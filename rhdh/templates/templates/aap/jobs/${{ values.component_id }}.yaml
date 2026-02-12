@@ -1,0 +1,15 @@
+apiVersion: tower.ansible.com/v1alpha1
+kind: AnsibleJob
+metadata:
+  name: ${{ values.component_id }}-job
+  namespace: aap
+spec:
+  # tower_auth_secret: my-toweraccess
+  tower_auth_secret: aap-access-details # This points to the secret above
+  job_template_name: ${{ values.name }}
+  organization_name: "myorg"
+  extra_vars:
+    ubi: ${{ values.ubi }}
+    ubiversion: ${{ values.ubiversion }}
+    imageversion: ${{ values.imageversion }}
+    appconfig: ${{ values.appconfig }}

@@ -1,0 +1,154 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: run-ansible-playbook
+  title: Run Ansible Playbook
+  description: Self serve trigger an existing ansible playbook
+spec:
+  owner: anahid
+  type: service
+  parameters:
+    - title: Ansible playbook details
+      required:
+        - name
+        - appconfig
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Choose the playbook you would like to run.
+          enum:
+            - Build-BootC-Golden-Disk
+            - install-nano
+          enumNames:
+            - 'Build BootC Image'
+            - 'Install nano pakage'
+        appconfig:
+          title: Application config
+          description: Write something as h1
+          type: string
+        imageversion:
+          title: Image Version
+          description: The image version tag for the bootc image
+          type: string
+          maxLength: 6
+          pattern: '^([a-zA-Z][a-zA-Z0-9]*)(-[a-zA-Z0-9]+)*$'
+      dependencies:
+        name:
+          oneOf:
+            - properties:
+                name:
+                  enum:
+                    - Build-BootC-Golden-Disk
+                ubi:
+                  title: UBI
+                  type: string
+                  description: UBI for the rhel
+                  enum:
+                    - ubi9
+                    - ubi8 
+                # baseimage:
+                #   title: Base Image
+                #   type: string
+                #   description: UBI for the rhel  
+                #   enum:
+                #     - rhel-9.4-x86_64-kvm.qcow2
+                #     - rhel-with-stuff-x86_64-kvm.qcow2
+                #     - rhel-danger-kvm.qcow2
+                #   enumNames:
+                #     - 'Approved Basic RHEL image'
+                #     - 'Approved RHEL with software installed'
+                #     - 'Experimental RHEL (not approved, dev purpose only)'
+                #   default: rhel-9.4-x86_64-kvm.qcow2
+
+                # imagename:
+                #   title: RHEL Image Name
+                #   type: string
+                #   description: Name of the bootable image
+                #   default: golden-rhel9
+            - properties:
+                name:
+                  enum:
+                    - install-nano
+                package:
+                  title: Image
+                  type: string
+                  description: Pick VM image
+                  enum:
+                    - golden-windows-server:112024
+                    - golden-windows-11:112024
+        ubi:
+          oneOf:
+            - properties:
+                ubi:
+                  enum:
+                    - ubi9
+                ubiversion:
+                  title: ubi9 version
+                  type: string
+                  description: UBI 9 version
+                  enum:
+                    - '9.4'
+                    - '9.5'
+                    - '9.6'  
+            - properties:
+                ubi:
+                  enum:
+                    - ubi8
+                ubiversion:
+                  title: ubi8 version
+                  type: string
+                  description: UBI 8 version
+                  enum:
+                    - '8.2'
+                    - '8.7'
+
+  steps:
+    - id: generate-id
+      name: Generate Unique ID
+      action: roadiehq:utils:jsonata
+      input:
+        # This JSONata expression generates a YYMMDDHHmmss timestamp
+        data: {}
+        expression: "$fromMillis($millis(), '[Y01][M01][D01][H01][m01][s01]')"
+    - id: debug-log
+      name: Debug Generated ID
+      action: debug:log
+      input:
+        message: "Component ID: ${{ parameters.name | lower }}-${{ steps['generate-id'].output.result }}"
+    - id: fetch-base-rhel
+      name: Fetch Base
+      action: fetch:template
+      input:
+        url: ./jobs
+        targetPath: ./aap/jobs
+        values:
+          component_id: "${{ parameters.name |lower }}-${{ steps['generate-id'].output.result }}"
+          name: ${{parameters.name}}
+          appconfig: ${{parameters.appconfig}}
+          imageversion: ${{parameters.imageversion}}
+          ubi: ${{parameters.ubi}}
+          ubiversion: ${{parameters.ubiversion}}
+          # baseimage: ${{parameters.baseimage}}
+          # imagename: ${{parameters.imagename}}
+          package: ${{parameters.package}}
+    - id: write-workspace-directory
+      name: List the workspace directory
+      action: debug:log
+      input:
+        listWorkspace: true
+    - id: create-pull-request
+      name: Create a pull reuqest with target branch name
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?repo=rh-gitops&owner=alinahid477
+        branchName: ${{parameters.name}}
+        title: Run Ansible - ${{parameters.name}}-${{ steps['generate-id'].output.result }}
+        description: PR to start ansible job - ${{parameters.name}}
+        targetBranchName: main
+        # targetPath: baremetal/virts
+
+  output:
+    links:
+      - url: ${{steps.publish.output.mergeRequestUrl}}
+        title: "Go to PR"

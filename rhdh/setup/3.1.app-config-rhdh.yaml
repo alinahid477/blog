@@ -1,0 +1,101 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: app-config-rhdh
+  namespace: backstage
+data:
+  app-config-rhdh.yaml: |
+
+    # (1)
+    app:
+      title: MetalSNO Self Serve Portal
+      baseUrl: https://backstage-selfserve-portal-backstage.apps.cluster-hlp2x.hlp2x.sandbox5530.opentlc.com
+
+    backend:
+      auth:
+        # Stabilizes sessions across pod restarts
+        keys:
+          - secret: ${BACKEND_SECRET}
+        externalAccess:
+        - type: legacy
+          options:
+            subject: legacy-default-config
+            secret: "${BACKEND_SECRET}"
+      baseUrl: https://backstage-selfserve-portal-backstage.apps.cluster-hlp2x.hlp2x.sandbox5530.opentlc.com
+      cors: 
+        origin: https://backstage-selfserve-portal-backstage.apps.cluster-hlp2x.hlp2x.sandbox5530.opentlc.com
+    # (2)
+    auth:
+      environment: production
+      session:
+        secret: ${BACKEND_SECRET}
+      providers:
+        guest:
+          dangerouslyAllowOutsideDevelopment: true
+        github:
+          production:
+            clientId: ${AUTH_GITHUB_CLIENT_ID}
+            clientSecret: ${GITHUB_CLIENT_SECRET}
+            # ADD THIS SECTION:
+            signIn:
+              resolvers:
+                # This resolver says: "If they log in via GitHub, just use their GitHub ID as their Backstage username"
+                - resolver: usernameMatchingUserEntityName
+                  dangerouslyAllowSignInWithoutUserInCatalog: true
+                # - resolver: preferredUsernameMatchingUserEntityName
+                # - resolver: emailMatchingUserEntityProfileEmail
+    integrations:
+      github:
+        - host: ${GITHUB_HOST_DOMAIN}
+          apps:
+            - appId: ${AUTH_GITHUB_APP_ID}
+              clientId: ${AUTH_GITHUB_CLIENT_ID}
+              clientSecret: ${GITHUB_CLIENT_SECRET}
+              webhookUrl: ${GITHUB_WEBHOOK_URL}
+              webhookSecret: ${GITHUB_WEBHOOK_SECRET}
+              privateKey: |
+                ${GITHUB_PRIVATE_KEY_FILE}
+    signInPage: github
+    
+    # # (3)
+    # proxy:
+    #   endpoints:
+    #     /sonarqube:
+    #       target: ${SONARQUBE_URL}/api
+    #       allowedMethods: ['GET', 'POST']
+    #       auth: "${SONARQUBE_TOKEN}:"
+
+    # (4)
+    catalog:
+
+      # By adding the GitHub Catalog Provider, you effectively gave Backstage a "master key" to crawl your entire GitHub Org for any file named catalog-info.yaml
+      # providers:
+      #   githubOrg:
+      #     id: production
+      #     githubUrl: "${GITHUB_URL}"
+      #     orgs: [ "${GITHUB_ORG}" ]
+      #     schedule:
+      #       frequency:
+      #         hours: 1
+      #       initialDelay:
+      #         seconds: 15
+      #       timeout:
+      #         minutes: 30
+      rules:
+        - allow: [Component, System, Group, API, Resource, Location, Template, User]
+      # I want to provide specifically.
+      locations:
+        - type: url
+          target: https://github.com/alinahid477/redhat-developer-hub-catalog/blob/main/templates.yaml
+    
+
+
+    argocd:
+      appLocatorMethods:
+        - type: 'config'
+          instances:
+            - name: main
+              # MUST be 'url', and ensure it starts with https://
+              url: https://argocd-server-openshift-gitops.apps.metalsno.home.alishomelab.site
+              # If you are using a token, ensure it is in your secrets-rhdh
+              token: ${ARGOCD_TOKEN}

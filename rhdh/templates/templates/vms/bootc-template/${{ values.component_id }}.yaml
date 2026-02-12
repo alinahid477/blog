@@ -1,0 +1,100 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: ${{values.name}}
+  namespace: ${{values.namespace}}
+  finalizers:
+    - kubevirt.io/virtualMachineControllerFinalize
+spec:
+  dataVolumeTemplates:
+    - metadata:
+        name: ${{values.name}}
+      spec:
+        source:
+          registry:
+            # imageStream: my-golden-rhel9:9.4.1
+            # pullMethod: node
+            url: "docker://quay.io/alitestseverything/my-rh9-bootc:${{values.imagetag}}"
+            # # url: "docker://metalsno-registry.apps.metalsno.home.alishomelab.site/openshift-virtualization-os-images/my-golden-rhel9:9.4.1"
+            # # pullMethod: node
+            secretRef: quay-registry-secret
+            # certConfigMap: tls-certs 
+        storage:
+          resources:
+            requests:
+              storage: ${{values.storage}}Gi
+  # instancetype:
+  #   kind: virtualmachineclusterinstancetype
+  #   name: ${{values.instancetype}}
+  # preference:
+  #   kind: virtualmachineclusterpreference
+  #   name: rhel.9
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/flavor: medium
+        vm.kubevirt.io/os: rhel.9
+        vm.kubevirt.io/workload: server
+      creationTimestamp: null
+      labels:
+        network.kubevirt.io/headlessService: headless
+        kubevirt.io/domain: ${{values.name}}
+        kubevirt.io/size: medium
+    spec:
+      accessCredentials:
+        - sshPublicKey:
+            propagationMethod:
+              noCloud: {}
+            source:
+              secret:
+                secretName: common-vm-ssh-key
+      architecture: amd64
+      domain:
+        cpu:
+          cores: 2
+          sockets: 1
+          threads: 1
+        memory:
+          guest: 8Gi
+        devices:
+          disks:
+            - disk:
+                bus: virtio
+              name: rootdisk
+            - disk:
+                bus: virtio
+              name: cloudinitdisk
+          interfaces:
+            - masquerade: {}
+              model: virtio
+              name: default
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            efi: {}
+        machine:
+          type: q35
+        resources: {}
+      networks:
+        - name: default
+          pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - dataVolume:
+            name: ${{values.name}}
+          name: rootdisk
+        - cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              chpasswd:
+                expire: false
+              password: ${{values.cloudinitpassword}}
+              user: ${{values.cloudinitusername}}
+          name: cloudinitdisk
+
+#runcmd:
+# - [ subscription-manager, register, --activationkey=activation-key-default-xxxx, --org=xxxx ]

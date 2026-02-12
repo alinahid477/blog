@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: default-token
+  namespace: backstage
+  annotations:
+    kubernetes.io/service-account.name: default
+type: kubernetes.io/service-account-token
+
+## oc get secret default-token -n backstage -o jsonpath='{.data.token}' | base64 --decode --> this is OPENSHIFT_TOKEN

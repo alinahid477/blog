@@ -1,0 +1,9 @@
+{
+    "yaml.schemas": {
+        "https://www.schemastore.org/app-config.json": [
+            "file:///home/anahid/ali/dev/repos/redhat-developer-hub-catalog/templates/aap/template.yaml",
+            "file:///home/anahid/ali/dev/repos/redhat-developer-hub-catalog/templates/apps/template.yaml",
+            "file:///home/anahid/ali/dev/repos/redhat-developer-hub-catalog/templates/vms/template.yaml"
+        ]
+    }
+}
