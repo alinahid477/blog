@@ -1,7 +1,9 @@
 FROM registry.redhat.io/rhel9/rhel-bootc:9.7
 
+# Must be 9.7. Because the podman is super old on 9.4 and throws confusing error.
+
 # --- RHSM (only if you need it during build; otherwise remove) ---
-RUN subscription-manager register --activationkey=bootc-test-sub --org=18358794 && \
+RUN subscription-manager register --activationkey=xxxxxxx --org=xxxxxx && \
     subscription-manager status
 
 # --- Enable EPEL (Chromium on EL9 is typically from EPEL) ---
@@ -74,7 +76,7 @@ RUN cat > /etc/containers/auth.json <<'EOF'
 {
         "auths": {
                 "quay.io/alitestseverything": {
-                        "auth": "YWxpdGVzdHNldmVyeXRoaW5nK2RlcGxveWVyOjNNTlJQNDNVQVozWjRRNUNENlNYSEpSSjQ0UFhXMUlSU0FBMDhBTUhZWUcxSVhTQ1QxTzNTSjhDRE1ZV0U4TU0="
+                        "auth": "base64 encoded (username:token)"
                 }
         }
 }    
