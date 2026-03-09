@@ -1,0 +1,26 @@
+#FROM registry.access.redhat.com/rhel9/rhel-micro:latest
+FROM registry.access.redhat.com/ubi9/ubi:latest
+
+RUN subscription-manager register --activationkey=xxx --org=xxxxx
+RUN subscription-manager status
+
+#RUN subscription-manager repos --enable rhacm-2.13-for-rhel-9-x86_64-rpms
+
+RUN dnf update -y && dnf install -y sudo wget nano && dnf clean all
+# && dnf install flightctl -y
+
+RUN wget -O /usr/bin/flightctl https://github.com/flightctl/flightctl/releases/download/v1.0.2/flightctl-linux-amd64 \
+    && chmod +x /usr/bin/flightctl
+
+RUN groupadd -g 1001 docker && \
+    useradd -m -g docker -G wheel dev && \
+    echo "dev:dev" | chpasswd
+
+# Ensure the wheel group can actually use sudo without a password (common for devcontainers)
+# RUN echo "dev ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+VOLUME [/var/run/docker.sock]
+
+USER dev
+WORKDIR /home/dev
+
+CMD [ "/bin/bash"]
