@@ -1,0 +1,23 @@
+---
+- name: Configure AAP initial setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/controller_auth.nogit
+    - vars/organizations.yml
+    - vars/credential_types.yml
+    - vars/credentials.yml
+    - vars/projects.yml
+    - vars/inventories.yml
+    - vars/job_templates.yml
+    - vars/workflows.yml
+  roles:
+    - infra.aap_configuration.controller_organizations
+    - infra.aap_configuration.controller_credential_types
+    - infra.aap_configuration.controller_credentials
+    - infra.aap_configuration.controller_projects
+    - infra.aap_configuration.controller_inventories
+    - infra.aap_configuration.controller_inventory_sources
+    - infra.aap_configuration.controller_job_templates
+    - infra.aap_configuration.controller_workflow_job_templates

@@ -1,0 +1,22 @@
+controller_workflows:
+
+  - name: check-and-remediate-required-services
+    organization: anahid-org
+    description: >-
+      Checks all RHEL hosts in Red Hat Insights for missing required services,
+      then remediates any gaps by installing and enabling them.
+    # simplified_workflow_nodes drives the node + link creation via the
+    # infra.aap_configuration.controller_workflow_job_templates role.
+    simplified_workflow_nodes:
+
+      - identifier: check-node
+        unified_job_template: check-enabled-services
+        lookup_organization: anahid-org
+        # On success, pass the missing_services_csv artifact to the next node.
+        # AAP automatically forwards set_stats artifacts as extra vars.
+        success_nodes:
+          - remediate-node
+
+      - identifier: remediate-node
+        unified_job_template: remediate-missing-services
+        lookup_organization: anahid-org

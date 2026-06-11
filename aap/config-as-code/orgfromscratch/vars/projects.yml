@@ -1,0 +1,11 @@
+controller_projects:
+  - name: anahid-aap
+    organization: anahid-org
+    scm_type: git
+    scm_url: https://github.com/alinahid477/ansible-lab.git
+    scm_branch: main
+    credential: alinahid477-github-secret
+    scm_update_on_launch: true
+    # update_project: false
+    # Playbooks live under the playbooks/ subdirectory in this repo.
+    # Reference them at Job Template level, e.g. playbooks/install-nano.yaml

@@ -1,0 +1,27 @@
+# AAP controller connection — fill in before running configure_aap.yml
+# This file is gitignored (*.nogit) and must never be committed.
+# RENAME THIS TO controller_auth.nogit
+aap_hostname: <aap_hostname>
+aap_token: <aap_token>
+
+# GitHub Personal Access Token for the alinahid477-github-secret credential
+github_pat: <github_pat>
+
+# Red Hat Insights offline token (used by the check-enabled-services playbook)
+# Generate at: https://access.redhat.com/management/api
+insight_offline_token: <insights_offline_token>
+
+# Red Hat Insights service account (used by the myrhels-insights inventory source)
+# Create a service account at: https://console.redhat.com/iam/service-accounts
+# Assign it the "Inventory Hosts Viewer" role in User Access
+insights_client_id: <insights_client_id>
+insights_client_secret: <insights_client_secret>
+
+
+# SSH Machine credential for RHEL host remediation
+# Fill in your actual SSH username and paste the PEM private key below.
+rhel_ssh_username: aap
+rhel_ssh_private_key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  <paste your private key here>
+  -----END OPENSSH PRIVATE KEY-----

@@ -1,0 +1,23 @@
+controller_templates:
+
+  - name: check-enabled-services
+    organization: anahid-org
+    project: anahid-aap
+    playbook: playbooks/check-enabled-services.yml
+    inventory: Demo Inventory
+    job_type: run
+    description: "Checks that all required services are enabled on RHEL hosts. Publishes missing_services_csv as a workflow artifact."
+    credentials:
+      - insights-offline-token
+      - rhel-ssh-key
+
+  - name: remediate-missing-services
+    organization: anahid-org
+    project: anahid-aap
+    playbook: playbooks/remediate-missing-services.yml
+    inventory: myrhels-insights
+    job_type: run
+    description: "Installs and enables any services listed in missing_services_csv on all target RHEL hosts."
+    ask_variables_on_launch: true
+    credentials:
+      - rhel-ssh-key

@@ -1,0 +1,18 @@
+controller_inventories:
+  - name: myrhels-insights
+    organization: anahid-org
+    description: "Dynamic inventory synced from Red Hat Insights workspace: myrhels"
+    variables: '{}'
+
+controller_inventory_sources:
+  - name: myrhels-insights-source
+    inventory: myrhels-insights
+    organization: anahid-org
+    source: insights
+    credential: rh-insights-creds
+    overwrite: true
+    overwrite_vars: true
+    update_on_launch: true
+    source_vars:
+      workspace_ids:
+        - "019eabb0-7a0a-7f30-90b9-9412090bd716"

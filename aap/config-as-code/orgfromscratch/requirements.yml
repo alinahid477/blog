@@ -1,0 +1,6 @@
+collections:
+  - name: ansible.controller
+    source: https://cloud.redhat.com/api/automation-hub/content/published/
+    version: "4.6.0"
+  - name: infra.aap_configuration
+    version: "3.4.0"
