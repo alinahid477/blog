@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skills-repo-config
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: skills-repo
+data:
+  # FILL IN: full HTTPS clone URL of the repository containing your skills.
+  # Example: https://github.com/your-org/your-skills-repo.git
+  GIT_REPO_URL: "https://github.com/<your-github-org>/<your-skills-repo>.git"
+
+  # Branch to clone (single-branch, shallow clone).
+  GIT_BRANCH: "main"
+
+  # Local path inside the container where the repo is cloned.
+  # When wired as a sidecar with an emptyDir, this must match
+  # the mountPath of the shared volume in the openclaw container.
+  CLONE_DIR: "/skills"

@@ -1,0 +1,25 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: openclaw
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: openclaw
+  annotations:
+    # Increase timeout for long-running agent WebSocket / SSE connections.
+    haproxy.router.openshift.io/timeout: 300s
+spec:
+  host: openclaw.apps.<your-cluster-domain>
+  port:
+    targetPort: gateway
+  tls:
+    # Edge termination: HTTPS at the Route, plain HTTP inside the cluster.
+    # allowInsecureAuth: true in openclaw.json is intentional — the pod
+    # receives HTTP internally even though the external URL is HTTPS.
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: openclaw
+    weight: 100
+  wildcardPolicy: None

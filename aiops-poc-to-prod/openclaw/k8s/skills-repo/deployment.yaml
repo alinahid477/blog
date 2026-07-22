@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skills-repo
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: skills-repo
+    app.kubernetes.io/version: "20260617-1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skills-repo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: skills-repo
+        app.kubernetes.io/version: "20260617-1"
+    spec:
+      serviceAccountName: skills-repo
+      automountServiceAccountToken: false
+
+      # OpenShift restricted-v2 SCC assigns a UID from the namespace range
+      # automatically. The image Dockerfile sets chown :0 + chmod g=u on
+      # /skills and /var/www so any UID can write — no anyuid SCC required.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: skills-repo
+        image: quay.io/<your-quay-username>/skills-repo:20260617-1
+        imagePullPolicy: Always
+        # Entrypoint: clone-skills.sh clones the repo then runs 'sleep infinity'
+        # so the pod stays in Running state (not Completed).
+        command: ["/usr/local/bin/clone-skills.sh"]
+
+        # Non-sensitive config from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: skills-repo-config
+
+        # Credentials from Secret — injected as individual env vars so they
+        # never touch the ConfigMap or pod spec in plaintext.
+        env:
+        - name: GIT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: skills-repo-secret
+              key: GIT_USERNAME
+        - name: GIT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: skills-repo-secret
+              key: GIT_PASSWORD
+
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        # Liveness: the clone-skills.sh script replaces itself with 'sleep infinity'
+        # via exec. If the process exits (clone failed), k8s will restart the pod.
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "test -d ${CLONE_DIR:-/skills}/.git"]
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          failureThreshold: 3
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop: ["ALL"]
+
+        # No volumes needed for standalone operation — the cloned repo lives
+        # in the container's writable layer at CLONE_DIR (/skills).
+        #
+        # ── Sidecar pattern (future) ────────────────────────────────────────
+        # To share the cloned skills with the openclaw container, add an emptyDir
+        # volume to the openclaw Deployment and run this container as a sidecar.
+        # Both containers mount the same emptyDir at /skills.
+        # This container clones into it on startup; openclaw reads from it.
+        # No PVC required since emptyDir is pod-local ephemeral storage.
+        #
+        # Example addition to the openclaw Deployment spec:
+        #
+        # volumes:
+        # - name: skills-data
+        #   emptyDir: {}
+        #
+        # initContainers:           ← skills-repo runs as an init container
+        # - name: skills-repo
+        #   image: quay.io/<your-quay-username>/skills-repo:20260617-1
+        #   command: ["/usr/local/bin/clone-skills.sh"]
+        #   env: [... same envFrom/env as above ...]
+        #   volumeMounts:
+        #   - name: skills-data
+        #     mountPath: /skills
+        #   (remove sleep infinity from script for init container usage)
+        #
+        # containers:
+        # - name: openclaw
+        #   volumeMounts:
+        #   - name: skills-data
+        #     mountPath: /home/node/.openclaw/workspace/skills
+        #     readOnly: true

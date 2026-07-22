@@ -1,0 +1,249 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: openclaw
+    app.kubernetes.io/version: "20260617-1"
+spec:
+  replicas: 1
+  # Recreate: PVC is ReadWriteOnce — only one pod may mount it at a time.
+  # This avoids a stuck rollout when the old pod holds the volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openclaw
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openclaw
+        app.kubernetes.io/version: "20260617-1"
+    spec:
+      serviceAccountName: openclaw
+
+      # Pod-level security: run as node user (UID 1000).
+      # IMPORTANT — OpenShift requires the 'anyuid' SCC for a fixed UID:
+      #   oc adm policy add-scc-to-user anyuid -z openclaw -n openclaw
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 0
+        fsGroup: 1000
+        runAsNonRoot: true
+        # seccompProfile:
+        #   type: RuntimeDefault
+
+      # ── Init container ──────────────────────────────────────────────────────
+      # Seeds the PVC on first boot from ConfigMaps.
+      # Uses 'cp -n' (no-clobber) so the agent's own writes are preserved on
+      # subsequent pod restarts. To force a re-seed, delete the target file
+      # from the PVC and restart the pod.
+      initContainers:
+      - name: init-config
+        image: quay.io/<your-quay-username>/myopenclaw:20260617-1
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          mkdir -p /home/node/.openclaw/workspace \
+                   /home/node/.openclaw/cron \
+                   /home/node/.openclaw/workspace/k8s-namespace-monitor/logs
+          # Seed openclaw.json (system config — not normally edited by the agent)
+          cp -n /tmp/init-config/openclaw.json /home/node/.openclaw/openclaw.json || true
+          # Seed workspace personality/instruction files
+          for f in AGENTS.md SOUL.md USER.md IDENTITY.md TOOLS.md HEARTBEAT.md; do
+            cp -n /tmp/init-workspace/$f /home/node/.openclaw/workspace/$f || true
+          done
+          # Seed cron job schedule
+          cp -n /tmp/init-cron/jobs.json /home/node/.openclaw/cron/jobs.json || true
+          echo "init-config: seed complete"
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+        - name: init-config
+          mountPath: /tmp/init-config
+          readOnly: true
+        - name: init-workspace
+          mountPath: /tmp/init-workspace
+          readOnly: true
+        - name: init-cron
+          mountPath: /tmp/init-cron
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+
+      # ── Init container: init-skills ─────────────────────────────────────────
+      # Downloads the skills tarball from the skills-repo Service and extracts
+      # it into the PVC at workspace/skills/.
+      # Runs AFTER init-config (init containers are sequential).
+      #
+      # Graceful fallback: if skills-repo is unreachable after all retries,
+      # logs a warning and exits 0 so openclaw still starts using whatever
+      # skills are already on the PVC (e.g. from a previous run).
+      - name: init-skills
+        image: alpine:3.21
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          SKILLS_URL="http://skills-repo:8080/skills.tar.gz"
+          SKILLS_DEST="/home/node/.openclaw/workspace/skills"
+          MAX_RETRIES=12
+          RETRY_WAIT=5
+
+          echo "[init-skills] Waiting for skills-repo to be ready..."
+          i=0
+          while [ $i -lt $MAX_RETRIES ]; do
+            i=$((i + 1))
+            if wget -q --spider "$SKILLS_URL" 2>/dev/null; then
+              echo "[init-skills] skills-repo is ready (attempt $i)."
+              break
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "[init-skills] WARNING: skills-repo not reachable after $MAX_RETRIES attempts."
+              echo "[init-skills] Falling back to existing skills on PVC (if any)."
+              exit 0
+            fi
+            echo "[init-skills] Not ready yet, retrying in ${RETRY_WAIT}s... ($i/$MAX_RETRIES)"
+            sleep $RETRY_WAIT
+          done
+
+          echo "[init-skills] Downloading ${SKILLS_URL}..."
+          wget -q -O /tmp/skills.tar.gz "$SKILLS_URL"
+
+          echo "[init-skills] Extracting into ${SKILLS_DEST}..."
+          mkdir -p "$SKILLS_DEST"
+          tar -xzf /tmp/skills.tar.gz -C "$SKILLS_DEST"
+          rm -f /tmp/skills.tar.gz
+
+          echo "[init-skills] Making shell scripts executable..."
+          find "$SKILLS_DEST" -name "*.sh" -exec chmod +x {} \;
+
+          echo "[init-skills] Skills installed:"
+          ls -la "$SKILLS_DEST"
+          echo "[init-skills] Done."
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+
+      # ── Main container ──────────────────────────────────────────────────────
+      containers:
+      - name: openclaw
+        image: quay.io/<your-quay-username>/myopenclaw:20260617-1
+        imagePullPolicy: Always
+        # Match the docker-compose command. '--bind lan' = 0.0.0.0 so the
+        # ClusterIP Service can reach the pod on its pod IP.
+        command: ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+        ports:
+        - name: gateway
+          containerPort: 18789
+          protocol: TCP
+        - name: bridge
+          containerPort: 18790
+          protocol: TCP
+        env:
+        - name: HOME
+          value: /home/node
+        - name: TERM
+          value: xterm-256color
+        # OPENCLAW_GATEWAY_TOKEN overrides the empty token in openclaw.json
+        - name: OPENCLAW_GATEWAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: OPENCLAW_GATEWAY_TOKEN
+        # TELEGRAM_BOT_TOKEN overrides channels.telegram.botToken in openclaw.json
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: TELEGRAM_BOT_TOKEN
+        # OpenShift credentials — read by do_login.sh and passed to the skill runtime
+        - name: OC_SERVER
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: OC_SERVER
+        - name: OC_USER
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: OC_USER
+        - name: OC_PASS
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: OC_PASS
+        # AAP credentials — passed to the vms-monitor skill runtime
+        - name: AAP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: AAP_HOST
+        - name: AAP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: AAP_TOKEN
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        # /healthz = liveness   /readyz = readiness  (built-in openclaw endpoints)
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 18789
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 18789
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        # Persistent home: agent state, workspace, memory files, cron, skills cache
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+        # Ephemeral /tmp: skills write compliance/remediation reports here at runtime
+        # (e.g. /tmp/aap/compliance-report-*.json, /tmp/k8s-monitoring-agent/logs/)
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: false
+
+      volumes:
+      - name: openclaw-data
+        persistentVolumeClaim:
+          claimName: openclaw-data
+      # Ephemeral scratch space for skill output files
+      - name: tmp
+        emptyDir: {}
+      # ConfigMap volumes — used by the init container only
+      - name: init-config
+        configMap:
+          name: openclaw-config
+      - name: init-workspace
+        configMap:
+          name: openclaw-workspace
+      - name: init-cron
+        configMap:
+          name: openclaw-cron

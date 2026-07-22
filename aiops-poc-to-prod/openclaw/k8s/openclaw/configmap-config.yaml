@@ -1,0 +1,189 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-config
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: openclaw
+data:
+  # K8s-adapted openclaw.json. Key changes from the local config:
+  #   - agents.defaults.workspace      → container path /home/node/.openclaw/workspace
+  #   - agents.defaults.sandbox.mode   → off (no docker socket in pod)
+  #   - gateway.auth.token             → "" (overridden by OPENCLAW_GATEWAY_TOKEN env var)
+  #   - gateway.controlUi.allowedOrigins → added Route URL
+  #   - skills.vms-monitor             → added from data/openclaw.json
+  #   - NOTE: skill env vars (OC_PASS, AAP_TOKEN) remain here so openclaw passes
+  #     them to the skill runtime process. They are also injected as pod env vars
+  #     from openclaw-secrets for scripts that read them directly (e.g. do_login.sh).
+  openclaw.json: |
+    {
+      "agents": {
+        "defaults": {
+          "workspace": "/home/node/.openclaw/workspace",
+          "model": {
+            "primary": "maas/qwen3-4b-instruct"
+          },
+          "models": {
+            "maas/qwen3-4b-instruct": {}
+          },
+          "sandbox": {
+            "mode": "off",
+            "workspaceAccess": "none",
+            "scope": "agent"
+          },
+          "elevatedDefault": "full"
+        }
+      },
+      "gateway": {
+        "mode": "local",
+        "auth": {
+          "mode": "token",
+          "token": ""
+        },
+        "port": 18789,
+        "bind": "lan",
+        "tailscale": {
+          "mode": "off",
+          "resetOnExit": false
+        },
+        "controlUi": {
+          "allowInsecureAuth": true,
+          "allowedOrigins": [
+            "http://localhost:18789",
+            "http://127.0.0.1:18789",
+            "https://openclaw.apps.<your-cluster-domain>"
+          ]
+        },
+        "nodes": {
+          "denyCommands": [
+            "camera.snap",
+            "camera.clip",
+            "screen.record",
+            "contacts.add",
+            "calendar.add",
+            "reminders.add",
+            "sms.send",
+            "sms.search"
+          ]
+        }
+      },
+      "session": {
+        "dmScope": "per-channel-peer"
+      },
+      "tools": {
+        "profile": "full",
+        "sessions": {
+          "visibility": "all"
+        },
+        "web": {
+          "search": {
+            "provider": "searxng",
+            "enabled": true
+          }
+        },
+        "sandbox": {
+          "tools": {
+            "allow": [
+              "group:runtime",
+              "group:fs",
+              "group:sessions",
+              "group:memory"
+            ]
+          }
+        },
+        "elevated": {
+          "enabled": true,
+          "allowFrom": {
+            "web": [
+              "*"
+            ]
+          }
+        }
+      },
+      "models": {
+        "mode": "merge",
+        "providers": {
+          "maas": {
+            "baseUrl": "https://maas-rhdp.apps.maas.<your_domain>/v1",
+            "api": "openai-completions",
+            "apiKey": "<your-maas-api-key>",
+            "models": [
+              {
+                "id": "qwen3-4b-instruct",
+                "name": "Qwen3 4B Instruct",
+                "reasoning": false,
+                "input": ["text"],
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 131072,
+                "maxTokens": 8192
+              }
+            ]
+          }
+        }
+      },
+      "auth": {
+        "profiles": {
+          "maas:default": {
+            "provider": "maas",
+            "mode": "api_key"
+          }
+        }
+      },
+      "channels": {
+        "telegram": {
+          "enabled": true,
+          "allowFrom": ["<your-telegram-user-id>"],
+          "dmPolicy": "pairing",
+          "groups": {
+            "*": {
+              "requireMention": true
+            }
+          },
+          "botToken": "<your-telegram-bot-token>"
+        }
+      },
+      "plugins": {
+        "entries": {
+          "searxng": {
+            "enabled": true,
+            "config": {
+              "webSearch": {
+                "baseUrl": "http://<your-searxng-host>:8888"
+              }
+            }
+          }
+        }
+      },
+      "wizard": {
+        "lastRunAt": "2026-05-18T10:53:25.370Z",
+        "lastRunVersion": "2026.4.21",
+        "lastRunCommand": "onboard",
+        "lastRunMode": "local"
+      },
+      "meta": {
+        "lastTouchedVersion": "2026.4.21",
+        "lastTouchedAt": "2026-05-18T10:54:48.370Z"
+      },
+      "skills": {
+        "entries": {
+          "k8s-namespace-monitor": {
+            "enabled": true,
+            "env": {
+              "OC_SERVER": "<your-oc-api-server>",
+              "OC_USER": "<your-oc-username>",
+              "OC_PASS": "<your-oc-password>"
+            }
+          },
+          "vms-monitor": {
+            "enabled": true,
+            "env": {
+              "AAP_HOST": "<your-aap-host>",
+              "AAP_TOKEN": "<your-aap-token>"
+            }
+          }
+        },
+        "install": {
+          "nodeManager": "pnpm"
+        }
+      }
+    }

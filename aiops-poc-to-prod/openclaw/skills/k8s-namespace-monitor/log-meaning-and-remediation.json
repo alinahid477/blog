@@ -1,0 +1,182 @@
+{
+  "version": "1.0",
+  "description": "Error knowledge base for k8s-namespace-monitor. Add new entries to the list array to extend coverage.",
+  "list": [
+    {
+      "id": "pgsql-conn-failure",
+      "log": "ERROR: Database connection failed",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "backendapp",
+      "severity": "critical",
+      "possible_fix_script": "fix_pgsqldb.sh",
+      "meaning": "The backendapp could not connect to the PostgreSQL database. The DB instance itself never goes down, but the Kubernetes Service exposing it may have been deleted. This will cause backendapp to crash.",
+      "remediation": "Run 'kubectl get svc postgresql -n dbapps' and check if the Service is present. If the Service is missing, recreate it by executing fix_pgsqldb.sh. If the Service is present, restart the backendapp deployment with 'kubectl rollout restart deployment/backendapp -n dbapps'."
+    },
+    {
+      "id": "backend-down-connection-error",
+      "log": "WARN: backend down. Connection Error",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "frontendapp",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The frontendapp is reporting that the backendapp is down or crashed, likely due to a database connection error. The backendapp may have crashed.",
+      "remediation": "Run 'kubectl get pods -n dbapps' and check if a pod with prefix 'backendapp' exists. If no pods are present, restart the backendapp deployment with 'kubectl rollout restart deployment/backendapp -n dbapps'. If pods are present, check if the backendapp Service exists by running 'kubectl get svc backendapp-svc -n dbapps'. If the Service is missing, recreate it using fix_apps.sh with parameters 'svc' and 'backendapp-svc'."
+    },
+    {
+      "id": "backend-down-pgsql-svc-missing",
+      "log": "ERROR: backend down. Error: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "frontendapp",
+      "severity": "critical",
+      "possible_fix_script": "fix_pgsqldb.sh",
+      "meaning": "The backendapp could not connect to the PostgreSQL database. The DB instance itself never goes down, but the Kubernetes Service exposing it may have been deleted. This will cause backendapp to crash.",
+      "remediation": "Run 'kubectl get svc postgresql -n dbapps' and check if the Service is present. If the Service is missing, recreate it by executing fix_pgsqldb.sh. If the Service is present, restart the backendapp deployment with 'kubectl rollout restart deployment/backendapp -n dbapps'."
+    },
+    {
+      "id": "backend-down-failed-settings",
+      "log": "WARN: backend down. failed to load settings",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "frontendapp",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The frontendapp could not load settings because the backendapp is down or unreachable.",
+      "remediation": "Run 'kubectl get pods -n dbapps' and check if a pod with prefix 'backendapp' exists. If no pods are present, restart the backendapp deployment with 'kubectl rollout restart deployment/backendapp -n dbapps'. If pods are present, check if the backendapp Service exists by running 'kubectl get svc backendapp-svc -n dbapps'. If the Service is missing, recreate it using fix_apps.sh with parameters 'svc' and 'backendapp-svc'."
+    },
+    {
+      "id": "configreader-down",
+      "log": "WARN: configreader down. failed to load settings",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "backendapp",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The backendapp (or frontendapp) could not reach the configreader service to load configuration values. This can cause backendapp to crash if it cannot obtain required config.",
+      "remediation": "Run 'kubectl get pods -n dbapps --selector=app=configreader' and check if configreader pods are present. If no pods are running, restart the configreader deployment with 'kubectl rollout restart deployment/configreader -n dbapps'. If pods are present, check the Service with 'kubectl get svc configreader-svc -n dbapps'. If the Service is missing, recreate it using fix_apps.sh with parameters 'svc' and 'configreader-svc'."
+    },
+    {
+      "id": "backendapp-required-values",
+      "log": "ERROR: app could not load required values",
+      "matchType": "exact",
+      "namespace": "dbapps",
+      "app": "backendapp",
+      "severity": "critical",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The backendapp failed to retrieve required configuration values from the configreader. This causes backendapp to crash immediately on startup.",
+      "remediation": "First resolve the configreader issue (see 'configreader-down' entry). Once configreader is healthy, restart backendapp with 'kubectl rollout restart deployment/backendapp -n dbapps'."
+    },
+    {
+      "id": "iss-latlong-error",
+      "log": "ERROR: Error converting lat,long into position text",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "backendapp",
+      "severity": "medium",
+      "possible_fix_script": "none",
+      "meaning": "The backendapp encountered an error when converting latitude/longitude coordinates into a position text string. This is likely caused by an external API or data format issue. The application probably does not crash from this error.",
+      "remediation": "No automated remediation available. This is an external API or data issue that requires manual review. Check the external geocoding or position API configuration."
+    },
+    {
+      "id": "iss-feed-error",
+      "log": "ERROR: Error fetching ISS position feed",
+      "matchType": "prefix",
+      "namespace": "dbapps",
+      "app": "backendapp",
+      "severity": "medium",
+      "possible_fix_script": "none",
+      "meaning": "The backendapp could not fetch data from the ISS (International Space Station) position feed external API. The application probably does not crash from this error.",
+      "remediation": "No automated remediation available. This is an external API connectivity issue. Check network egress rules and the ISS feed API endpoint. Manual review required."
+    },
+    {
+      "id": "nginx-upstream-connection-timeout",
+      "log": "2026/05/08 01:57:41 [error] 12#12: *11 upstream timed out (110: Operation timed out) while connecting to upstream",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "Nginx attempted to establish a TCP connection to the backend upstream server, but the server did not respond within the configured timeout period (proxy_connect_timeout). The backend is likely hanging, overloaded, or dropping packets.",
+      "remediation": "Investigate the backend application's health, resource usage, and network connectivity. You can attempt to clear temporary hangs by restarting the deployment with 'kubectl rollout restart deployment/mybusybox -n test'."
+    },
+    {
+      "id": "nginx-worker-connections",
+      "log": "2026/05/08 02:03:51 [warn] 1#1: *1142 1024 worker_connections are not enough while connecting to upstream",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "medium",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The nginx server in mybusybox is running out of worker connections when trying to connect to upstream services. This can degrade performance under load.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. Note: restarting may not permanently fix connection limits — this may require nginx config tuning."
+    },
+    {
+      "id": "nginx-no-live-upstreams",
+      "log": "2026/05/08 02:04:42 [error] 1#1: *4183 no live upstreams while connecting to upstream",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "All upstream servers in the nginx upstream group are down or unreachable. nginx cannot route requests.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. There is no guarantee restarting will fix the issue but it is the only available automated action."
+    },
+    {
+      "id": "nginx-config-missing",
+      "log": "2026/05/08 01:50:28 [error] 1#1: open() \"/etc/nginx/missing.conf\" failed (2: No such file or directory)",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "critical",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The nginx configuration file is missing inside the container. nginx cannot start without this file.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. This may restore the config if it is part of the container image. There is no guarantee restarting will fix it."
+    },
+    {
+      "id": "nginx-body-too-large",
+      "log": "2026/05/08 01:42:07 [error] 12#12: *8 client intended to send too large body: 5000 bytes",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "low",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "A client sent a request body larger than the configured nginx limit (client_max_body_size). Requests are being rejected.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. Note: restarting will not fix the underlying config limit — this requires nginx config changes."
+    },
+    {
+      "id": "nginx-ssl-handshake",
+      "log": "2026/05/08 02:05:33 [crit] 1#1: *8859 SSL_do_handshake() failed (SSL: error:14094410:SSL routines:SSL3_READ_BYTES:sslv3 alert handshake failure)",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "The workload is suffering from an SSL/TLS handshake failure. Clients are unable to establish secure connections.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'."
+    },
+    {
+      "id": "nginx-connection-refused",
+      "log": "2026/05/08 01:29:10 [error] 12#12: *5 connect() failed (111: Connection refused) while connecting to upstream",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "nginx cannot connect to the local upstream at 127.0.0.1:8080. The upstream application inside the pod is not running or not listening on port 8080.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. There is no guarantee restarting will fix the issue but it is the only available automated action."
+    },
+    {
+      "id": "nginx-bind-failed",
+      "log": "2026/05/10 10:45:19 [emerg] 1#1: bind() to 0.0.0.0:80 failed (13: Permission denied)",
+      "matchType": "contains",
+      "namespace": "test",
+      "app": "mybusybox",
+      "severity": "high",
+      "possible_fix_script": "fix_apps.sh",
+      "meaning": "This error means Nginx is trying to listen on port 80, but the container or process is running as a non-root user. Ports under 1024 require root privileges to bind.",
+      "remediation": "Restart the mybusybox deployment with 'kubectl rollout restart deployment/mybusybox -n test'. It will not fix the issue but should temporarily supress it."
+    }
+  ]
+}

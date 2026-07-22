@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - serviceaccount.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+# Secret is generated from a local .env.secrets file (gitignored).
+# Copy .env.secrets.example → .env.secrets and fill in real values before deploying.
+# disableNameSuffixHash keeps the name as 'skills-repo-secret' so the Deployment
+# reference does not need to change.
+secretGenerator:
+- name: skills-repo-secret
+  namespace: openclaw
+  envs:
+  - .env.secrets
+  options:
+    disableNameSuffixHash: true

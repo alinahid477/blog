@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-cron
+  namespace: openclaw
+  labels:
+    app.kubernetes.io/name: openclaw
+data:
+  jobs.json: |
+    {
+      "version": 1,
+      "jobs": [
+        {
+          "id": "69d43a02-3779-4ff8-8d25-3ec76034b4ed",
+          "agentId": "main",
+          "sessionKey": "agent:main:telegram:direct:<your-telegram-user-id>",
+          "name": "k8s-namespace-monitor-daily",
+          "enabled": true,
+          "createdAtMs": 1779110363255,
+          "schedule": {
+            "expr": "0 */2 * * *",
+            "kind": "cron",
+            "tz": "Australia/Sydney"
+          },
+          "sessionTarget": "isolated",
+          "wakeMode": "now",
+          "payload": {
+            "kind": "agentTurn",
+            "message": "Run the k8s-namespace-monitor skill to check for issues in dbapps and test namespaces."
+          },
+          "delivery": {
+            "mode": "announce",
+            "to": "<your-telegram-user-id>"
+          },
+          "state": {}
+        }
+      ]
+    }
