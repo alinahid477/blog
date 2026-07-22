@@ -35,25 +35,16 @@ oc adm policy add-scc-to-user anyuid -z openclaw -n openclaw
 
 Run this before (or immediately after) the first `kubectl apply -k`.
 
-### 3. Verify network reachability from pods
-
-The config references two external services on your LAN:
-- Ollama: `http://<your-ollama-host>:11434`
-- SearXNG: `http://<your-searxng-host>:8888`
-
-Ensure your cluster nodes can reach your LAN services. If not, update those URLs in
-`configmap-config.yaml` before deploying.
-
 ---
 
 ## Deploy
 
 ```bash
-# From the repo root:
-kubectl apply -k k8s/openclaw/
-
 # Grant anyuid SCC (OpenShift)
 oc adm policy add-scc-to-user anyuid -z openclaw -n openclaw
+
+# From the repo root:
+kubectl apply -k k8s/openclaw/
 
 # Watch the pod come up
 kubectl get pods -n openclaw -w
@@ -129,6 +120,7 @@ Namespace: openclaw
 ## Updating config or workspace files
 
 **Gateway config** (`openclaw.json`):
+
 ```bash
 # Edit configmap-config.yaml, then:
 kubectl apply -k k8s/
@@ -138,6 +130,7 @@ kubectl rollout restart deployment/openclaw -n openclaw
 ```
 
 **Workspace markdown files** (AGENTS.md, SOUL.md, etc.):
+
 ```bash
 # Edit configmap-workspace.yaml, then apply + force re-seed as above.
 # Or edit the file directly in the PVC via exec:
@@ -145,6 +138,7 @@ kubectl exec -n openclaw deploy/openclaw -- vi /home/node/.openclaw/workspace/AG
 ```
 
 **Rotate gateway token**:
+
 ```bash
 NEW_TOKEN=$(openssl rand -hex 32)
 kubectl patch secret openclaw-secrets -n openclaw \
@@ -166,10 +160,13 @@ kubectl delete namespace openclaw
 
 ## Known limitations
 
-| Limitation | Detail |
-|---|---|
-| **No sandbox isolation** | `agents.defaults.sandbox.mode: off` — the docker-based sandbox doesn't work without a docker socket. Skills run directly in the pod. |
-| **Single replica only** | PVC is `ReadWriteOnce`. Horizontal scaling is not supported. |
-| **Ollama / SearXNG on LAN** | Pods must reach your LAN host. Tested on same-network clusters only. |
-| **cert.pem / key.pem not mounted** | The `data/cert.pem` and `data/key.pem` files were not included — their purpose was unclear in the k8s context. Add them as a Secret + volume mount if needed. |
+
+| Limitation                         | Detail                                                                                                                                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No sandbox isolation**           | `agents.defaults.sandbox.mode: off` — the docker-based sandbox doesn't work without a docker socket. Skills run directly in the pod.                                                                     |
+| **Single replica only**            | PVC is `ReadWriteOnce`. Horizontal scaling is not supported.                                                                                                                                             |
+|                                    |                                                                                                                                                                                                          |
+|                                    |                                                                                                                                                                                                          |
 | **Skill credentials in ConfigMap** | `OC_PASS` and `AAP_TOKEN` appear in `openclaw.json` (in the ConfigMap) because openclaw passes them to skill processes via `skills.entries.*.env`. They are also in the Secret for direct env injection. |
+
+
