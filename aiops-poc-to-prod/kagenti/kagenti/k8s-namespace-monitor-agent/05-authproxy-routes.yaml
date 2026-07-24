@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authproxy-routes
+  namespace: agents
+data:
+  routes.yaml: |
+    - host: kubernetes-mcp-server.mcp-servers.svc.cluster.local
+      target_audience: "spiffe://apps.<your-cluster-domain>/ns/mcp-servers/sa/kubernetes-mcp-server"
+    - host: "mcp-gateway-for-agents.gateway-system.svc.cluster.local"
+      port: 8081
+      audience: "spiffe://apps.<your-cluster-domain>/ns/gateway-system/sa/mcp-gateway-istio"
+      no_token_policy: "client-credentials"

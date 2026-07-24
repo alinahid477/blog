@@ -1,0 +1,63 @@
+---
+# HTTPRoute in mcp-system — backend discovery artifact for mcp-gateway-controller.
+#
+# WHY IT'S IN mcp-system (not mcp-servers):
+#   The mcp-gateway-controller runs with NAMESPACE=mcp-system, scoping its
+#   controller-runtime informer cache to mcp-system only. HTTPRoutes in other
+#   namespaces are never cached and return "not found".
+#
+# WHY parentRefs IS REQUIRED:
+#   The MCPServerRegistration controller validates that the HTTPRoute is attached
+#   to a known Gateway before registering the tool. Without parentRefs the
+#   controller reports "no valid gateways for httproute" and stays NotReady.
+#
+# LISTENER CHOICE (sectionName: mcp):
+#   The mcp-gateway Gateway has two listeners:
+#     mcp  (public)   hostname: mcp-gateway-gateway-system.apps.ocp...
+#     mcps (internal) hostname: *.mcp.local
+#
+# PORT 9091 — AUTHBRIDGE BYPASS:
+#   The backendRef targets port 9091 (kubernetes-mcp-server-internal Service),
+#   NOT port 9090.  Port 9090 is owned by the AuthBridge iptables interceptor
+#   which requires a Bearer JWT.  Port 9091 is the app's internal listening
+#   port and is NOT in the iptables REDIRECT chain, so the broker connects
+#   directly to the app without needing a token.
+#   Access to port 9091 is restricted to the broker's SPIFFE identity by
+#   10-authz-policy.yaml.
+#
+# CROSS-NAMESPACE backendRef:
+#   The Service lives in mcp-servers. The Gateway API cross-namespace reference
+#   is permitted by 06-mcp-servers-reference-grant.yaml (allows any Service
+#   in mcp-servers to be referenced from mcp-system HTTPRoutes).
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/05-httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kubernetes-mcp-server-internal
+  namespace: mcp-system
+  labels:
+    app: kubernetes-mcp-server-internal
+    app.kubernetes.io/name: kubernetes-mcp-server-internal
+    mcp-server: "true"
+spec:
+  parentRefs:
+    - name: mcp-gateway
+      namespace: gateway-system
+      sectionName: mcps
+  hostnames:
+    # - kubernetes-mcp-server-internal.mcp-system.svc.cluster.local
+    - kubernetes-mcp-server-internal.mcp.local
+  rules:
+    - backendRefs:
+        - kind: Service
+          name: kubernetes-mcp-server-internal # port 9091, bypasses AuthBridge iptables
+          # name: kubernetes-mcp-server
+          group: ""
+          namespace: mcp-servers                 # cross-ns — permitted by ReferenceGrant
+          port: 9091 #9090 #9091
+      matches:
+        - path:
+            type: PathPrefix
+            value: /mcp

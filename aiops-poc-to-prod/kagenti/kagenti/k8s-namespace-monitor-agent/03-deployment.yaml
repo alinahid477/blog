@@ -1,0 +1,126 @@
+---
+# Deployment and Service for the k8s-namespace-monitor agent in A2A serve mode.
+#
+# Prerequisites:
+#   - rbac.yaml already applied (ServiceAccount + Secret)
+#   - Image pushed to quay.io/<your-org>/k8s-namespace-monitor-agent:latest
+#   - kubernetes-mcp-server deployed on Kagenti (kagenti/k8s-mcp-server/)
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-namespace-monitor-agent/deployment.yaml
+#
+# The agent connects to the kubernetes-mcp-server via MCP_SERVER_URL (plain env var).
+# Recommended value: http://mcp-gateway-istio.gateway-system.svc.cluster.local:8080/mcp
+# Direct fallback:   http://kubernetes-mcp-server.mcp-servers.svc.cluster.local:9090/mcp
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-namespace-monitor-agent
+  namespace: agents
+  labels:
+    kubernetes.io/name: k8s-namespace-monitor-agent
+    protocol.kagenti.io/a2a: "" 
+    kagenti.io/spire: "enabled"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      kubernetes.io/name: k8s-namespace-monitor-agent
+  template:
+    metadata:
+      labels:
+        protocol.kagenti.io/a2a: ""
+        kubernetes.io/name: k8s-namespace-monitor-agent
+        kagenti.io/inject: "enabled"
+        kagenti.io/spire: "enabled"
+      annotations:
+        kagenti.io/inject: "enabled"
+        kagenti.io/spire: "enabled"
+    spec:
+      serviceAccountName: k8s-namespace-monitor-agent
+      containers:
+        - name: agent
+          image: quay.io/<your-quay-username>/k8s-namespace-monitor:<tag>
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            # ── LLM (OpenAI-compatible MaaS endpoint) ──────────────────────
+            - name: OPENAI_BASE_URL
+              value: "http://maas.apps.ocp.<your-cluster-domain>/llm/qwen3-4b-instruct/v1"
+            - name: OPENAI_MODEL
+              value: "qwen3-4b-instruct"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-namespace-monitor-secrets-self-maas
+                  key: OPENAI_API_KEY
+            # ── MCP server ─────────────────────────────────────────────────
+            - name: MCP_SERVER_URL
+              # value: "http://kubernetes-mcp-server.mcp-servers.svc.cluster.local:9090/mcp"
+              # value: "https://mcp-gateway-gateway-system.apps.<your-cluster-domain>/mcp"
+              value: "http://mcp-gateway-for-agents.gateway-system.svc.cluster.local:8081/mcp"
+            # Tool name prefix added by the upstream MCP broker.
+            # Set to "kubernetes_" when using MCP Gateway (MCPServerRegistration toolPrefix).
+            # Leave empty ("") when talking directly to kubernetes-mcp-server.
+            - name: TOOL_PREFIX
+              value: "kubernetes_"
+              #value: ""
+            # ── Telegram notifications ─────────────────────────────────────
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-namespace-monitor-secrets
+                  key: TELEGRAM_BOT_TOKEN
+            - name: TELEGRAM_CHAT_ID
+              value: "<your-telegram-chat-id>"
+            # ── Log collection ─────────────────────────────────────────────
+            - name: LOG_TAIL_LINES
+              value: "2000"
+            - name: LOG_WINDOW_HOURS
+              value: "1"
+            # ── Knowledge base ─────────────────────────────────────────────
+            - name: KNOWLEDGE_BASE_PATH
+              value: "knowledge-libraries/log-meaning-and-remediation.json"
+            # ── A2A server ─────────────────────────────────────────────────
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /.well-known/agent-card.json
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /.well-known/agent-card.json
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-namespace-monitor-agent
+  namespace: agents
+  labels:
+    kubernetes.io/name: k8s-namespace-monitor-agent
+    kagenti.io/type: agent
+spec:
+  selector:
+    kubernetes.io/name: k8s-namespace-monitor-agent
+  ports:
+    - name: a2a
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

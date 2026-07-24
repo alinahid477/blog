@@ -1,0 +1,52 @@
+---
+# Internal Service — exposes the app's native port (9091) directly, bypassing
+# AuthBridge's iptables interception.
+#
+# WHY THIS EXISTS — THE AUTHBRIDGE BYPASS PROBLEM:
+#   The Kagenti operator injects AuthBridge into the kubernetes-mcp-server pod
+#   using iptables: all inbound traffic on port 9090 is transparently redirected
+#   to the AuthBridge sidecar, which validates the Bearer JWT before forwarding
+#   to the app on localhost:9091.
+#
+#   The MCP Gateway broker (mcp-gateway in mcp-system) has no JWT — it is a
+#   trusted intra-mesh service identified by its SPIFFE workload certificate,
+#   not a user presenting a token.  Forcing the broker to obtain and rotate
+#   short-lived JWTs defeats the purpose of the ambient mesh trust model.
+#
+# HOW THE BYPASS WORKS:
+#   AuthBridge's iptables REDIRECT rule targets port 9090 specifically:
+#     iptables -t nat -A PREROUTING -p tcp --dport 9090 -j REDIRECT --to-port <authbridge>
+#   Port 9091 is the app's internal listening port and is NOT in the iptables
+#   REDIRECT chain.  Traffic arriving at pod_ip:9091 goes directly to the app
+#   container, bypassing AuthBridge entirely.
+#
+#   This Service therefore gives the broker a direct, JWT-free path to the app.
+#
+# SECURITY:
+#   Bypassing AuthBridge on this port is safe only because:
+#     1. An Istio AuthorizationPolicy (10-authz-policy.yaml) restricts port 9091
+#        access to the mcp-gateway ServiceAccount's SPIFFE identity.
+#     2. Both namespaces are enrolled in the Istio ambient mesh; all traffic is
+#        mTLS-encrypted and the peer SPIFFE identity is verified by ztunnel.
+#     3. Port 9090 (AuthBridge) remains the only path for external consumers
+#        (human agents, CLI) that present JWT tokens.
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/09-internal-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-mcp-server-internal
+  namespace: mcp-servers
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-server
+    app: kubernetes-mcp-server
+    kagenti.io/access: internal-only
+spec:
+  selector:
+    app.kubernetes.io/name: kubernetes-mcp-server
+  ports:
+    - name: mcp-internal
+      port: 9091
+      targetPort: 9091
+      protocol: TCP

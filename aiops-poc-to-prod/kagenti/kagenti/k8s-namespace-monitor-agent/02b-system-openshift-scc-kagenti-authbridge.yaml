@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: system:openshift:scc:kagenti-authbridge
+  namespace: agents
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:kagenti-authbridge
+subjects:
+- kind: ServiceAccount
+  name: controller-manager
+  namespace: kagenti-system

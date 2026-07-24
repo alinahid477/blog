@@ -1,0 +1,19 @@
+---
+# Namespace for the k8s-namespace-monitor agent.
+#
+# Labels follow the same conventions as the mcp-servers namespace so the
+# Kagenti operator, MCP Gateway, and Istio ambient mesh treat it consistently.
+#
+# Apply first:
+#   kubectl apply -f kagenti/k8s-namespace-monitor-agent/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agents
+  labels:
+    shared-gateway-access: "true"
+    kagenti-enabled: "true"
+    istio-discovery: enabled
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: waypoint
+  #   pod-security.kubernetes.io/enforce: privileged

@@ -1,0 +1,60 @@
+---
+# MCPServerRegistration — registers kubernetes-mcp-server with the Kuadrant
+# MCP Gateway broker (mcp-gateway) running in mcp-system.
+#
+# WHY THIS EXISTS:
+#   Applying the AgentRuntime (04-kagenti-tool.yaml) enrolls the Deployment
+#   with the Kagenti operator (labels, sidecars, config-hash) but does NOT
+#   register the tool with the MCP Gateway broker. The broker is a separate
+#   Kuadrant component (ghcr.io/kuadrant/mcp-gateway) that maintains its own
+#   registry of backend MCP servers in the mcp-gateway-config Secret.
+#
+#   MCPServerRegistration is the CRD that bridges the two systems:
+#     AgentRuntime (Kagenti operator) ─── manages the tool Deployment
+#     MCPServerRegistration (Kuadrant)  ─── wires tool into MCP Gateway broker
+#
+# HOW IT WORKS (after applying):
+#   1. mcp-gateway-controller reads this CR and the referenced HTTPRoute
+#      (05-httproute.yaml) to resolve the backend address:
+#      kubernetes-mcp-server-internal.mcp-servers:9091
+#   2. Controller updates the mcp-gateway-config Secret:
+#        servers: [] → servers: [{name: kubernetes-mcp-server, url: ..., path: /mcp}]
+#   3. mcp-gateway broker reloads config and starts proxying /mcp requests
+#      to kubernetes-mcp-server, aggregating its tools alongside any other
+#      registered servers.
+#
+# CREDENTIALS / AUTH — NO JWT NEEDED:
+#   credentialRef is intentionally omitted. The HTTPRoute (05-httproute.yaml)
+#   targets the kubernetes-mcp-server-INTERNAL Service (port 9091), which
+#   bypasses AuthBridge's iptables interception on port 9090.
+#
+#   Access to port 9091 is guarded at the Istio ztunnel layer by
+#   10-authz-policy.yaml, which ALLOWs only the broker's SPIFFE identity
+#   (spiffe://localtest.me/ns/mcp-system/sa/mcp-gateway).
+#
+#   External consumers (CLI, agents) continue to use the AuthBridge-protected
+#   port 9090 with Bearer JWT tokens.
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/07-mcpserverregistration.yaml
+#
+# Verify — broker config should show this server after reconciliation:
+#   kubectl get secret mcp-gateway-config -n mcp-system \
+#     -o jsonpath='{.data.config\.yaml}' | base64 -d
+#
+#   kubectl get mcpserverregistration -n mcp-system
+apiVersion: mcp.kuadrant.io/v1alpha1
+kind: MCPServerRegistration
+metadata:
+  name: kubernetes-mcp-server-internal
+  namespace: mcp-system
+  labels:
+    app: kubernetes-mcp-server-internal
+    app.kubernetes.io/name: kubernetes-mcp-server-internal
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: kubernetes-mcp-server-internal
+    namespace: mcp-system   # HTTPRoute is in mcp-system (controller cache namespace)
+  toolPrefix: kubernetes_

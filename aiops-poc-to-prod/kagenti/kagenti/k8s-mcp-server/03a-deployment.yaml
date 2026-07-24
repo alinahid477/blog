@@ -1,0 +1,128 @@
+---
+# Deployment and Service for the kubernetes-mcp-server MCP tool.
+#
+# Prerequisites:
+#   - openshift-rbac.yaml already applied in the target namespace
+#   - Image pushed to quay.io/<your-quay-username>/kubernetes-mcp-server:<tag>
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/03-deployment.yaml
+#
+# The ServiceAccount "kubernetes-mcp-server" (created by openshift-rbac.yaml) is
+# referenced here to give the pod in-cluster API access to "dbapps" and
+# "simple-webserver" namespaces without mounting a kubeconfig.
+#
+# The protocol.kagenti.io/mcp label marks this Deployment as an MCP tool so
+# the Kagenti operator registers it with the MCP Gateway automatically.
+#
+# Note: the Kagenti operator's AuthBridge webhook injects PORT=9091 into the
+# app container at pod creation time, causing the binary to listen on 9091
+# internally while AuthBridge owns port 9090 externally. The probes below
+# check 9090 (AuthBridge) which is the correct external entry point.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernetes-mcp-server
+  namespace: mcp-servers
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-server
+    app: kubernetes-mcp-server
+    protocol.kagenti.io/mcp: ""
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubernetes-mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubernetes-mcp-server
+        app: kubernetes-mcp-server
+        kagenti.io/inject: "enabled" 
+        kagenti.io/spire: "enabled"
+      annotations:
+        kagenti.io/inject: "enabled"
+        kagenti.io/spire: "enabled"
+        kagenti.io/authbridge-mode: "proxy-sidecar"
+    spec:
+      serviceAccountName: kubernetes-mcp-server
+      containers:
+        - name: kubernetes-mcp-server
+          image: quay.io/<your-quay-username>/kubernetes-mcp-server:<tag>
+          env:
+            # Disable the go-sdk DNS rebinding protection.
+            # The server listens on localhost (forwarded by AuthBridge via iptables), so
+            # the SDK's loopback check fires for any non-loopback Host header. Since
+            # AuthBridge already handles security, this protection is redundant here.
+            - name: MCPGODEBUG
+              value: "disablelocalhostprotection=1"
+            # Bypass the AuthBridge proxy for direct Kubernetes API access.
+            # The webhook injects NO_PROXY=127.0.0.1,localhost which is too narrow —
+            # it doesn't exclude kubernetes.default.svc, causing the Go K8s client
+            # to route API discovery calls through the proxy (which returns 405).
+            # The 172.231.0.1 is the IP of the cluster-internal API server.
+            # verify with: kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}'
+            - name: NO_PROXY
+              value: "127.0.0.1,localhost,kubernetes.default.svc,kubernetes.default.svc.cluster.local,172.231.0.0/16,10.96.0.0/12"
+            - name: no_proxy
+              value: "127.0.0.1,localhost,kubernetes.default.svc,kubernetes.default.svc.cluster.local,172.231.0.0/16,10.96.0.0/12"
+          ports:
+            - name: mcp
+              containerPort: 9090
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-mcp-server
+  namespace: mcp-servers
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-server
+    app: kubernetes-mcp-server
+spec:
+  selector:
+    app.kubernetes.io/name: kubernetes-mcp-server
+  ports:
+    - name: mcp
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+
+---
+# Kagenti-convention Service: name=<deployment>-mcp, port=8000.
+# The Kagenti UI and MCP Gateway discover tools via this naming pattern.
+# Targets port 9090 (AuthBridge), which validates tokens and forwards to the app.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-mcp-server-mcp
+  namespace: mcp-servers
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-server
+    app: kubernetes-mcp-server
+spec:
+  selector:
+    app.kubernetes.io/name: kubernetes-mcp-server
+  ports:
+    - name: mcp
+      port: 8000
+      targetPort: 9091
+      protocol: TCP

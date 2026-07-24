@@ -1,0 +1,31 @@
+---
+# AgentRuntime CR — attaches runtime configuration to the k8s-namespace-monitor-agent
+# Deployment, classifying it as an agent workload for the Kagenti operator.
+#
+# What the Kagenti operator does when this is applied:
+#   1. Adds kagenti.io/type=agent label to the Deployment and its PodTemplateSpec
+#   2. Adds app.kubernetes.io/managed-by=kagenti-operator annotation
+#   3. Optionally injects AuthBridge sidecars (if platform feature gate is enabled)
+#   4. Registers the agent in the Kagenti A2A registry
+#
+# Apply AFTER the Deployment is Running:
+#   kubectl apply -f 05-agentruntime.yaml
+#
+# Verify:
+#   kubectl get agentruntime -n agents
+#   kubectl describe agentruntime k8s-namespace-monitor-agent-runtime -n agents
+
+apiVersion: agent.kagenti.dev/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: k8s-namespace-monitor-agent-runtime
+  namespace: agents
+spec:
+  type: agent
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: k8s-namespace-monitor-agent
+  identity:
+    spiffe:
+      trustDomain: apps.<your-cluster-domain>

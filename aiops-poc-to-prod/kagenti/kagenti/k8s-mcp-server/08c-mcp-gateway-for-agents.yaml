@@ -1,0 +1,35 @@
+# kubectl logs deployment/k8s-namespace-monitor-agent -n agents -c envoy-proxy --tail=50
+# The logs reveal the issue. The envoy-proxy sidecar shows zero outbound activity — no log entries for mcp-gateway-istio, no token exchange, no passthrough. This means the outbound traffic to mcp-gateway-istio:8080 is bypassing the Envoy sidecar entirely.
+
+# This is almost certainly because port 8080 is excluded from iptables interception by default. From the weather agent demo docs:
+
+# AuthBridge's proxy-init init container redirects traffic through Envoy. By default, only port 8080 (Keycloak) is excluded.
+
+# Port 8080 is excluded because Keycloak's internal service runs on port 8080, and the sidecar itself needs to reach Keycloak for token exchange without creating a loop. But the MCP Gateway's internal service also uses port 8080 (mcp-gateway-istio:8080), so traffic to it bypasses the sidecar too — no token injection happens.
+
+# Verify by checking what the init container excluded:
+
+# # Check the proxy-init init container's args/env for excluded ports
+# kubectl get pod -n agents -l kubernetes.io/name=k8s-namespace-monitor-agent \
+#   -o jsonpath='{.items[0].spec.initContainers[?(@.name=="proxy-init")].env}' | python3 -m json.tool
+
+# How to fix
+# You need the agent to reach the MCP Gateway on a port that is not excluded from iptables interception. You can't remove the port 8080 exclusion because the sidecar itself needs Keycloak on 8080.
+
+# Create a separate Service that maps a different port (e.g., 8081) to the MCP Gateway pod's port 8080:
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-gateway-for-agents
+  namespace: gateway-system
+  labels:
+    app: mcp-gateway-istio
+spec:
+  selector:
+    gateway.networking.k8s.io/gateway-name: mcp-gateway
+  ports:
+    - name: mcp
+      port: 8081
+      targetPort: 8080
+      protocol: TCP

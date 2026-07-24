@@ -1,0 +1,35 @@
+---
+# ReferenceGrant in mcp-servers — allows the HTTPRoute in mcp-system to
+# reference the kubernetes-mcp-server Service in mcp-servers.
+#
+# WHY THIS EXISTS:
+#   The mcp-gateway-controller is namespace-scoped to mcp-system (set via the
+#   NAMESPACE env var in its Deployment). Its informer cache only indexes
+#   resources in mcp-system, so the HTTPRoute backend discovery artifact
+#   (05-httproute.yaml) must live in mcp-system too.
+#
+#   However, the HTTPRoute in mcp-system has a cross-namespace backendRef
+#   pointing to kubernetes-mcp-server.mcp-servers:9090. The Gateway API spec
+#   requires a ReferenceGrant in the target namespace (mcp-servers) to permit
+#   this cross-namespace Service reference.
+#
+#   Without this grant, the HTTPRoute backendRef is considered invalid and the
+#   controller may fail to resolve the backend address.
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/06-mcp-servers-reference-grant.yaml
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-mcp-system
+  namespace: mcp-servers          # MUST be in the namespace owning the Service
+  labels:
+    app: kubernetes-mcp-server
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: mcp-system       # the namespace containing the HTTPRoute
+  to:
+    - group: ""
+      kind: Service               # allows reference to any Service in mcp-servers

@@ -1,0 +1,86 @@
+---
+# RBAC resources for the kubernetes-mcp-server MCP tool.
+#
+# The MCP server authenticates with the Kubernetes API using the pod's
+# in-cluster ServiceAccount token. This manifest grants:
+#   - Namespace list/watch at the cluster level (for the namespaces_list MCP tool)
+#   - admin access inside the "dbapps" and "simple-webserver" namespaces
+#
+# Apply (namespace must already exist):
+#   kubectl apply -f kagenti/k8s-mcp-server/02-openshift-rbac.yaml
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubernetes-mcp-server
+  namespace: mcp-servers
+  labels:
+    app: kubernetes-mcp-server
+    kagenti.io/type: tool
+imagePullSecrets:
+  - name: quay-pull-secret
+---
+# Minimal cluster-level ClusterRole: permits only namespace listing/watching.
+# Required so the MCP server's namespaces_list tool can enumerate namespaces
+# without receiving cluster-admin privileges.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernetes-mcp-server-ns-reader
+  labels:
+    app: kubernetes-mcp-server
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubernetes-mcp-server-ns-reader
+  labels:
+    app: kubernetes-mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubernetes-mcp-server-ns-reader
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp-server
+    namespace: mcp-servers
+---
+# Admin access inside the "dbapps" namespace.
+# Grants full read/write to all standard resources within that namespace,
+# excluding cluster-scoped resources (Nodes, PersistentVolumes, etc.).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernetes-mcp-server-admin
+  namespace: dbapps
+  labels:
+    app: kubernetes-mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp-server
+    namespace: mcp-servers
+---
+# Admin access inside the "simple-webserver" namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernetes-mcp-server-admin
+  namespace: simple-webserver
+  labels:
+    app: kubernetes-mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp-server
+    namespace: mcp-servers

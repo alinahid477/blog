@@ -1,0 +1,39 @@
+---
+# AgentRuntime CR — enrolls the kubernetes-mcp-server Deployment as a Kagenti tool.
+#
+# What the Kagenti operator does when this is applied:
+#   1. Adds kagenti.io/type=tool label to the Deployment and its PodTemplateSpec
+#   2. Adds app.kubernetes.io/managed-by=kagenti-operator annotation
+#   3. Injects AuthBridge sidecars into new pods (if the injectTools feature gate
+#      is enabled on the platform)
+#   4. Computes a config-hash annotation — any platform config change triggers a
+#      rolling restart automatically
+#
+# The protocol.kagenti.io/mcp label on the Deployment (set in deployment.yaml)
+# combined with kagenti.io/type=tool causes the MCP Gateway to discover and
+# register this tool automatically. Agents can then reach it via the gateway:
+#
+#   MCP_URL=http://mcp-gateway-istio.gateway-system.svc.cluster.local:8080/mcp
+#
+# Or directly via the Service (if agents connect without the gateway):
+#
+#   MCP_URL=http://kubernetes-mcp-server.mcp-servers.svc.cluster.local:9090/mcp
+#
+# Apply:
+#   kubectl apply -f kagenti/k8s-mcp-server/04-kagenti-tool.yaml
+#
+# Verify:
+#   kubectl get agentruntime -n mcp-servers
+#   kubectl describe agentruntime kubernetes-mcp-server-runtime -n mcp-servers
+
+apiVersion: agent.kagenti.dev/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: kubernetes-mcp-server-runtime
+  namespace: mcp-servers
+spec:
+  type: tool
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kubernetes-mcp-server

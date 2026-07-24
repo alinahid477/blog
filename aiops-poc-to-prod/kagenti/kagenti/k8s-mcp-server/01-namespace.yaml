@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-servers
+  labels:
+    shared-gateway-access: "true"
+    kagenti-enabled: "true"
+    istio-discovery: enabled
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: waypoint
+    # pod-security.kubernetes.io/enforce: privileged
