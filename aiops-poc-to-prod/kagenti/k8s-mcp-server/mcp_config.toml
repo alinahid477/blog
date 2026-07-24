@@ -1,0 +1,41 @@
+# kubernetes-mcp-server configuration for local development testing.
+# Upstream: https://github.com/containers/kubernetes-mcp-server
+#
+# Tools used by k8s-namespace-monitor-agent:
+#   Step 0 – namespaces_list              (cluster connectivity check)
+#   Step 1 – pods_list_in_namespace      (log collection: discover pods)
+#             pods_log                    (log collection: fetch pod logs)
+#   Step 5 – resources_get               (remediator: inspect resources)
+#             resources_list             (remediator: list resources)
+#             resources_create_or_update (remediator: patch annotations / restart)
+#   Step 6 – resources_get               (verifier: check deployment readiness)
+# https://github.com/containers/kubernetes-mcp-server/blob/main/docs/configuration.md
+
+
+log_level = 3
+# Port is set at runtime via the PORT env var (default: 9090).
+# The Dockerfile CMD passes --port ${PORT:-9090} which takes precedence over this file.
+# Local dev: PORT unset → 9090.  OpenShift/Kagenti: operator injects PORT=9091 which not desirable.
+read_only = false
+disable_destructive = false
+stateless = true       # safe for Kubernetes deployments and load balancing
+# Cluster provider strategy (kubeconfig, in-cluster, kcp, disabled)
+# in-cluster uses ServiceAccount.
+cluster_provider_strategy = "in-cluster" 
+# This must be kubeconfig because kagenti passes the auth header which is really client. not a real k8s user.
+cluster_auth_mode = "kubeconfig" # Cluster auth mode: passthrough (forward Authorization header when present, fall back to kubeconfig when absent) or kubeconfig (always use kubeconfig credentials). Defaults to passthrough.
+
+# Prevent the agent from accidentally modifying auth/RBAC resources.
+denied_resources = [
+  {group = "", version = "v1", kind = "ServiceAccount"},
+  {group = "", version = "v1", kind = "Secret"},
+  {group = "rbac.authorization.k8s.io", version = "v1"},
+]
+
+# Disable tools the agent never calls.
+disabled_tools = [
+  "configuration_view",
+  "helm_install",
+  "helm_list",
+  "helm_uninstall",
+]
