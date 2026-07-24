@@ -1,0 +1,75 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: qwen3-4b-instruct
+  namespace: llm
+  labels:
+    opendatahub.io/dashboard: 'true'
+    opendatahub.io/genai-asset: 'true'
+spec:
+  model:
+    name: qwen3-4b-instruct
+    uri: 'oci://quay.io/jharmison/models:qwen--qwen3-4b-instruct-2507-modelcar'
+  replicas: 1
+  router:
+    gateway:
+      refs:
+        - name: maas-default-gateway
+          namespace: openshift-ingress
+    route: {}
+  template:
+    containers:
+      - resources:
+          limits:
+            cpu: '6'
+            memory: 48Gi
+            nvidia.com/gpu: '1'
+          requests:
+            cpu: '4'
+            memory: 32Gi
+            nvidia.com/gpu: '1'
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTPS
+        name: main
+        command:
+          - python
+          - '-m'
+          - vllm.entrypoints.openai.api_server
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTPS
+        ports:
+          - containerPort: 8000
+            name: http
+            protocol: TCP
+        volumeMounts:
+          - mountPath: /dev/shm
+            name: shm
+        image: 'registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.2.5'
+        args:
+          - '--served-model-name={{.Name}}'
+          - '--model=/mnt/models'
+          - '--enable-ssl-refresh'
+          - '--ssl-certfile=/var/run/kserve/tls/tls.crt'
+          - '--ssl-keyfile=/var/run/kserve/tls/tls.key'
+          - '--enable-auto-tool-choice' #----> VERY IMPORTANT FOR AGENT TOOL CALLS
+          - '--tool-call-parser=hermes'
+          - '--gpu-memory-utilization=0.95'
+          - '--max-model-len=131072'
+    nodeSelector:
+      nvidia.com/gpu.present: 'true'
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Equal
+        value: l40-gpu
+    volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+        name: shm
